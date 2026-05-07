@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox
 import subprocess
-print("hello world")
+
 # Admin account
 admin_user = "admin"
 admin_pass = "12345"
