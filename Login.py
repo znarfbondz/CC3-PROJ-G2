@@ -5,8 +5,8 @@ import sys
 
 # Login function
 def login():
-    username = username_entry.get()
-    password = password_entry.get()
+    username = username_entry.get().strip()
+    password = password_entry.get().strip()
 
     if username == "" or password == "":
         messagebox.showwarning("Warning", "Fill all fields")
