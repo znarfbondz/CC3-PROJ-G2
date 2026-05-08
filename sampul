@@ -1,0 +1,134 @@
+import tkinter as tk
+from tkinter import messagebox
+
+
+student_data = {}
+entries = {}
+dashboard_labels = {}
+
+
+def show_frame(frame):
+    login_frame.pack_forget()
+    form_frame.pack_forget()
+    dashboard_frame.pack_forget()
+    frame.pack(fill="both", expand=True)
+
+
+def login():
+    username = username_entry.get().strip()
+    password = password_entry.get().strip()
+
+    if username == "" or password == "":
+        messagebox.showwarning("Warning", "Fill all fields")
+        return
+
+    if username == "admin" and password == "admin123":
+        show_frame(form_frame)
+    else:
+        messagebox.showerror("Error", "Wrong Username or Password")
+
+
+def save_student():
+    last_name = entries["Last Name"].get().strip()
+    first_name = entries["First Name"].get().strip()
+    student_id = entries["Student ID"].get().strip()
+    section = entries["Section"].get().strip()
+    course = entries["Course"].get().strip()
+
+    if (
+        last_name == ""
+        or first_name == ""
+        or student_id == ""
+        or section == ""
+        or course == ""
+    ):
+        messagebox.showwarning("Warning", "Fill all fields")
+        return
+
+    student_data["name"] = f"{last_name}, {first_name}"
+    student_data["student_id"] = student_id
+    student_data["section"] = section
+    student_data["course"] = course
+    student_data["grades"] = "Math: 92, Science: 90, English: 94, Programming: 96"
+    student_data["quizzes"] = "Quiz 1: 18/20, Quiz 2: 19/20, Quiz 3: 20/20"
+    student_data["attendance"] = "20 days present"
+
+    show_student_info()
+    clear_entries()
+    show_frame(dashboard_frame)
+
+
+def show_student_info():
+    dashboard_labels["name"].config(text="Name: " + student_data["name"])
+    dashboard_labels["student_id"].config(
+        text="Student ID: " + student_data["student_id"]
+    )
+    dashboard_labels["section"].config(text="Section: " + student_data["section"])
+    dashboard_labels["course"].config(text="Course: " + student_data["course"])
+    dashboard_labels["grades"].config(text="Grades: " + student_data["grades"])
+    dashboard_labels["quizzes"].config(text="Quizzes: " + student_data["quizzes"])
+    dashboard_labels["attendance"].config(
+        text="Attendance: " + student_data["attendance"]
+    )
+
+
+def clear_entries():
+    for entry in entries.values():
+        entry.delete(0, tk.END)
+
+
+window = tk.Tk()
+window.title("Student Information System")
+window.geometry("400x500")
+
+
+login_frame = tk.Frame(window)
+form_frame = tk.Frame(window)
+dashboard_frame = tk.Frame(window)
+
+
+tk.Label(login_frame, text="SIS LOGIN", font=("Arial", 16)).pack(pady=15)
+
+tk.Label(login_frame, text="Username").pack()
+username_entry = tk.Entry(login_frame)
+username_entry.pack(pady=5)
+
+tk.Label(login_frame, text="Password").pack()
+password_entry = tk.Entry(login_frame, show="*")
+password_entry.pack(pady=5)
+
+tk.Button(login_frame, text="Login", command=login).pack(pady=15)
+
+
+tk.Label(form_frame, text="Student Information Form", font=("Arial", 16)).pack(pady=15)
+
+fields = ["Last Name", "First Name", "Student ID", "Section", "Course"]
+
+for field in fields:
+    tk.Label(form_frame, text=field).pack()
+    entry = tk.Entry(form_frame)
+    entry.pack(pady=5)
+    entries[field] = entry
+
+tk.Button(form_frame, text="Submit", command=save_student).pack(pady=10)
+tk.Button(form_frame, text="Back to Login", command=lambda: show_frame(login_frame)).pack()
+
+
+tk.Label(dashboard_frame, text="Student Dashboard", font=("Arial", 16)).pack(pady=15)
+
+for key in ["name", "student_id", "section", "course", "grades", "quizzes", "attendance"]:
+    label = tk.Label(dashboard_frame, text="", wraplength=350, justify="left")
+    label.pack(pady=5)
+    dashboard_labels[key] = label
+
+tk.Button(
+    dashboard_frame,
+    text="Add Another Student",
+    command=lambda: show_frame(form_frame),
+).pack(pady=10)
+
+tk.Button(dashboard_frame, text="Logout", command=lambda: show_frame(login_frame)).pack()
+
+
+show_frame(login_frame)
+window.mainloop()
