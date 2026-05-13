@@ -11,7 +11,7 @@ except ImportError:
 # ----------Details--------------
 APP_TITLE = "V-SMART: Valenzuela Student Management and Records Technology"
 WINDOW_W, WINDOW_H = 1100, 650
-BG_PATH = "C:\\CC3-IMAGES\\Screenshot 2026-05-11 231939.png"
+BG_PATH = "C:\\CC3 - FEATURES\\Screenshot 2026-05-11 231939.png"
 WHITE_PANEL = "white"
 BUTTON_BG = "#359bfc"
 TEXT_COLOR = "#0f172a"
@@ -61,14 +61,18 @@ class LoginPage(tk.Tk):
         # to update bg later
         self.bg_item = self.canvas.create_image(0, 0, anchor="nw")
 
-        # Create the card 
+        # Create the card (FIXED)
         self.card_window = None
         self._build_card()  # Actually build and place the card
+
+        # Animation variables
+        self._card_y = -200  # Start above the window
 
         # RESIZE AND ENTER KEYS
         self.bind("<Configure>", self._on_resize)
         self.bind("<Return>", lambda _e: self._handle_login())
 
+       
     # ---------- Background ----------
     def _load_background(self):
         if os.path.exists(BG_PATH):
@@ -100,13 +104,13 @@ class LoginPage(tk.Tk):
         accent_bar.pack(fill="x", padx=0, pady=(0, 24))
 
         # ── Logo ──
-        LOGO_PATH = "C:\\CC3-IMAGES\\download.jpg"
+        LOGO_PATH = "C:\\CC3 - FEATURES\\download.png"
         if os.path.exists(LOGO_PATH):
             try:
                 raw = Image.open(LOGO_PATH).resize((72, 72), Image.LANCZOS)
                 # Circular crop
                 mask = Image.new("L", (72, 72), 0)
-                d = ImageDraw.Draw(mask) 
+                d = ImageDraw.Draw(mask)  # Now ImageDraw is imported
                 d.ellipse((0, 0, 72, 72), fill=255)
                 raw.putalpha(mask)
                 self._logo_photo = ImageTk.PhotoImage(raw)
@@ -144,7 +148,7 @@ class LoginPage(tk.Tk):
         self._build_button(card)
 
         # ── Footer ──
-        tk.Label(card, text="DepEd Valenzuela City Division  ·  2026",
+        tk.Label(card, text="Valenzuela Information Technology Society  ·  2026",
                  bg=C_PANEL, fg=C_MUTED, font=FONT_SMALL).pack(pady=(16, 0))
 
         # Place the card on canvas (initially above screen for animation)
@@ -201,6 +205,8 @@ class LoginPage(tk.Tk):
         self._btn.bind("<Enter>", lambda e: self._btn.config(bg=C_BTN_HVR))
         self._btn.bind("<Leave>", lambda e: self._btn.config(bg=C_ACCENT))
 
+    # ───── Slide-in animation (FIXED) ─────
+   
 
     # ───── Login logic ─────
     def _handle_login(self):
@@ -219,17 +225,22 @@ class LoginPage(tk.Tk):
             self.after(1200, lambda: self._btn.config(text="LOG  IN  →", bg="#1e6bff"))
             messagebox.showerror("Access Denied", "Invalid username or password.")
 
+
+
     def _open_dashboard(self, username):
         self.withdraw()  # Hide login window
-        dashboard_root = tk.Tk()  #  NEW ROOT for dashboard
-        Dashboard(dashboard_root)  #  Pass NEW root + username
-        dashboard_root.mainloop()
-        self.deiconify()
+        dashboard_root = tk.Toplevel(self)
+        dashboard_root.protocol(
+            "WM_DELETE_WINDOW",
+            lambda: (dashboard_root.destroy(), self._on_logout())
+        )
+        Dashboard(dashboard_root, username, on_logout=self._on_logout, users=USERS)
 
     def _on_logout(self):
-            self.deiconify()  # bring login back
+        self.deiconify()  # bring login back
+        if self._btn:
             self._btn.config(text="LOG  IN  →", bg="#1e6bff")
-            self.user_var.set("")
-            self.pass_var.set("")
+        self.user_var.set("")
+        self.pass_var.set("")
 
 LoginPage().mainloop()
