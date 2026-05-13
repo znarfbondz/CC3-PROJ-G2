@@ -1,4 +1,4 @@
-from Dashboard import Dashboard
+from DASHBOARD import Dashboard
 import os
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -11,7 +11,7 @@ except ImportError:
 # ----------Details--------------
 APP_TITLE = "V-SMART: Valenzuela Student Management and Records Technology"
 WINDOW_W, WINDOW_H = 1100, 650
-BG_PATH = "C:\\Users\\abelx\\Downloads\\Screenshot_2026-05-11_231939.png"
+BG_PATH = "C:\\CC3-IMAGES\\Screenshot 2026-05-11 231939.png"
 WHITE_PANEL = "white"
 BUTTON_BG = "#359bfc"
 TEXT_COLOR = "#0f172a"
@@ -61,19 +61,13 @@ class LoginPage(tk.Tk):
         # to update bg later
         self.bg_item = self.canvas.create_image(0, 0, anchor="nw")
 
-        # Create the card (FIXED)
+        # Create the card 
         self.card_window = None
         self._build_card()  # Actually build and place the card
-
-        # Animation variables
-        self._card_y = -200  # Start above the window
 
         # RESIZE AND ENTER KEYS
         self.bind("<Configure>", self._on_resize)
         self.bind("<Return>", lambda _e: self._handle_login())
-
-        # Start slide-in animation after window is drawn
-        self.after(100, self._slide_in_card)
 
     # ---------- Background ----------
     def _load_background(self):
@@ -106,13 +100,13 @@ class LoginPage(tk.Tk):
         accent_bar.pack(fill="x", padx=0, pady=(0, 24))
 
         # ── Logo ──
-        LOGO_PATH = "C:\\Users\\abelx\\Downloads\\download.jpg"
+        LOGO_PATH = "C:\\CC3-IMAGES\\download.jpg"
         if os.path.exists(LOGO_PATH):
             try:
                 raw = Image.open(LOGO_PATH).resize((72, 72), Image.LANCZOS)
                 # Circular crop
                 mask = Image.new("L", (72, 72), 0)
-                d = ImageDraw.Draw(mask)  # Now ImageDraw is imported
+                d = ImageDraw.Draw(mask) 
                 d.ellipse((0, 0, 72, 72), fill=255)
                 raw.putalpha(mask)
                 self._logo_photo = ImageTk.PhotoImage(raw)
@@ -207,25 +201,6 @@ class LoginPage(tk.Tk):
         self._btn.bind("<Enter>", lambda e: self._btn.config(bg=C_BTN_HVR))
         self._btn.bind("<Leave>", lambda e: self._btn.config(bg=C_ACCENT))
 
-    # ───── Slide-in animation (FIXED) ─────
-    def _slide_in_card(self):
-        target_y = self.winfo_height() // 2
-        start_y = -200
-        steps = 28
-
-        def step(current_y, i):
-            if i > steps:
-                return
-            t = i / steps
-            # Ease out cubic
-            ease = 1 - (1 - t) ** 3
-            new_y = int(start_y + (target_y - start_y) * ease)
-            if self.card_window:
-                self.canvas.coords(self.card_window, self.winfo_width() // 2, new_y)
-            if i < steps:
-                self.after(16, lambda: step(new_y, i + 1))
-
-        step(start_y, 1)
 
     # ───── Login logic ─────
     def _handle_login(self):
@@ -233,7 +208,6 @@ class LoginPage(tk.Tk):
         p = self.pass_var.get().strip()
 
         if not u or not p:
-            self._shake_card()
             messagebox.showwarning("Missing Fields", "Please enter both username and password.")
             return
 
@@ -243,22 +217,7 @@ class LoginPage(tk.Tk):
         else:
             self._btn.config(text="✗  INVALID", bg="#dc2626")
             self.after(1200, lambda: self._btn.config(text="LOG  IN  →", bg="#1e6bff"))
-            self._shake_card()
             messagebox.showerror("Access Denied", "Invalid username or password.")
-
-    def _shake_card(self):
-        if not self.card_window:
-            return
-        cx = self.winfo_width() // 2
-        cy = self.winfo_height() // 2
-        offsets = [10, -10, 8, -8, 5, -5, 2, -2, 0]
-
-        def step(i=0):
-            if i < len(offsets):
-                self.canvas.coords(self.card_window, cx + offsets[i], cy)
-                self.after(40, lambda: step(i + 1))
-
-        step()
 
     def _open_dashboard(self, username):
         self.withdraw()  # Hide login window
