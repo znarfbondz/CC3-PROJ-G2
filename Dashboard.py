@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import datetime
-from PIL import Image, ImageTk
+
 # ── Themes ────────────────────────────────────────────────────────────────
 THEMES: dict[str, dict] = {
     "light": {
@@ -25,11 +25,13 @@ class Dashboard:
     # ─────────────────────────────────────────────────────────────────────
     # INIT
     # ─────────────────────────────────────────────────────────────────────
-    def __init__(self, root, username=None):
+    def __init__(self, root, username=None, on_logout=None, users=None):
         self.root = root
         self.username = username
-        self.root.title("V-SMART")
-        self.root.title(f"V-SMART: VALENZUELA STUDENT MANAGEMENT AND RECORDS TECHNOLOGY - {self.username}" if self.username else "V-SMART: VALENZUELA STUDENT MANAGEMENT AND RECORDS TECHNOLOGY")
+        self.on_logout = on_logout
+        self.users = users if users is not None else {"admin": "admin", "user": "1234"}
+        self.root.title("Dashboard")
+        self.root.title(f"Dashboard - {self.username}" if self.username else "Dashboard")
         self.theme_name = "light"
         self.T = THEMES[self.theme_name].copy()
         self.root.geometry("1230x720")
@@ -41,13 +43,19 @@ class Dashboard:
         self.students:     list[dict] = []
         self.courses_data: list[dict] = [
             {"code": "BSIT",   "name": "BS Information Technology",  "instructor": "Prof. Reyes",     "units": 180},
+            {"code": "BSCS",   "name": "BS Computer Science",         "instructor": "Prof. Santos",    "units": 180},
             {"code": "BSCE",   "name": "BS Civil Engineering",        "instructor": "Prof. Dela Cruz", "units": 192},
             {"code": "BSEd",   "name": "BS Education",                "instructor": "Prof. Garcia",    "units": 156},
             {"code": "BSBA",   "name": "BS Business Administration",  "instructor": "Prof. Torres",    "units": 168},
+            {"code": "BSN",    "name": "BS Nursing",                  "instructor": "Prof. Lim",       "units": 200},
+            {"code": "BSME",   "name": "BS Mechanical Engineering",   "instructor": "Prof. Bautista",  "units": 192},
             {"code": "BSEE",   "name": "BS Electrical Engineering",   "instructor": "Prof. Mendoza",   "units": 192},
+            {"code": "BSARCH", "name": "BS Architecture",             "instructor": "Prof. Cruz",      "units": 204},
         ]
         self.activity_log: list[dict] = []
-        self.current_user  = ""
+        self.current_user = username if username else "admin"
+
+        self._log(f"User '{self.current_user}' logged in")
         self._edit_idx: int | None = None
         self.form_vars:    dict[str, tk.StringVar] = {}
         self.theme_name    = "light"
@@ -77,19 +85,33 @@ class Dashboard:
 
     def _style_tree(self):
         s = ttk.Style()
-        s.configure("Treeview",
-                    font=("Arial", 10), rowheight=29,
-                    background=self.T["CARD"],
-                    fieldbackground=self.T["CARD"],
-                    foreground=self.T["TEXT"])
-        s.configure("Treeview.Heading",
-                    font=("Arial", 10, "bold"),
-                    background=self.T["ACCENT"],
-                    foreground="#ffffff",
-                    relief="flat")
-        s.map("Treeview",
-              background=[("selected", self.T["ACCENT"])],
-              foreground=[("selected", "#ffffff")])
+
+        s.theme_use("clam")
+
+        s.configure(
+            "Treeview",
+            font=("Segoe UI", 10),
+            rowheight=34,
+            background=self.T["CARD"],
+            fieldbackground=self.T["CARD"],
+            foreground=self.T["TEXT"],
+            borderwidth=0
+        )
+
+        s.configure(
+            "Treeview.Heading",
+            font=("Segoe UI Semibold", 10),
+            background=self.T["ACCENT"],
+            foreground="#ffffff",
+            padding=8,
+            relief="flat"
+        )
+
+        s.map(
+            "Treeview",
+            background=[("selected", "#3b82f6")],
+            foreground=[("selected", "#ffffff")]
+        )
 
     def _clear(self, widget=None):
         for c in (widget or self.root).winfo_children():
@@ -165,53 +187,18 @@ class Dashboard:
         self._show_dashboard()
 
     def _build_sidebar(self):
-    # Load and display logo image
-    
         logo = tk.Frame(self._sidebar, bg=self.T["ACCENT"], height=80)
-        logo.pack(fill="x")
-        logo.pack_propagate(False)
-    
-        try:
-            image_path = "C:\\CC3-IMAGES\\download.png"  # Replace with your image path
-            
-            # Open and resize the image
-            original_image = Image.open(image_path)
-            
-            # Calculate appropriate size (maintain aspect ratio)
-            # The frame height is 80, so we'll resize to fit with some padding
-            target_height = 65
-            aspect_ratio = original_image.width / original_image.height
-            target_width = int(target_height * aspect_ratio)
-            
-            # Don't exceed frame width (max 225px for sidebar)
-            if target_width > 200:
-                target_width = 200
-                target_height = int(200 / aspect_ratio)
-            
-            resized_image = original_image.resize((target_width, target_height), Image.Resampling.LANCZOS)
-            logo_image = ImageTk.PhotoImage(resized_image)
-            
-            # Display image
-            img_label = tk.Label(logo, image=logo_image, bg=self.T["ACCENT"])
-            img_label.image = logo_image  # Keep reference to prevent garbage collection
-            img_label.pack(expand=True)
-            
-        except Exception as e:
-            # Fallback to text logo if image fails to load
-            print(f"Could not load logo image: {e}")
-            tk.Label(logo, text="🎓   V-SMART", font=("Arial", 17, "bold"),
-                    bg=self.T["ACCENT"], fg="#ffffff").pack(expand=True)
-        
-        # User info frame 
+        logo.pack(fill="x"); logo.pack_propagate(False)
+        tk.Label(logo, text="🎓   SIS", font=("Arial", 17, "bold"),
+                 bg=self.T["ACCENT"], fg="#ffffff").pack(expand=True)
         uframe = tk.Frame(self._sidebar, bg=self.T["SIDEBAR_BG"], pady=7)
         uframe.pack(fill="x")
         tk.Label(uframe, text=f"👤  {self.current_user}",
-                font=("Arial", 10), bg=self.T["SIDEBAR_BG"],
-                fg="#aed6f1").pack()
+                 font=("Arial", 10), bg=self.T["SIDEBAR_BG"],
+                 fg="#aed6f1").pack()
 
         ttk.Separator(self._sidebar).pack(fill="x", padx=10, pady=4)
 
-        # Navigation buttons (unchanged from your original code)
         nav = [
             ("📊   Dashboard",    self._show_dashboard),
             ("➕   Add Student",  lambda: self._show_form()),
@@ -222,11 +209,11 @@ class Dashboard:
         ]
         for txt, cmd in nav:
             b = tk.Button(self._sidebar, text=txt, font=("Arial", 11),
-                        bg=self.T["SIDEBAR_BG"], fg=self.T["SIDEBAR_FG"],
-                        relief="flat", anchor="w", padx=18, pady=9,
-                        cursor="hand2",
-                        activebackground=self.T["SIDEBAR_HV"],
-                        command=cmd)
+                          bg=self.T["SIDEBAR_BG"], fg=self.T["SIDEBAR_FG"],
+                          relief="flat", anchor="w", padx=18, pady=9,
+                          cursor="hand2",
+                          activebackground=self.T["SIDEBAR_HV"],
+                          command=cmd)
             b.pack(fill="x")
             b.bind("<Enter>", lambda e, w=b: w.config(bg=self.T["SIDEBAR_HV"]))
             b.bind("<Leave>", lambda e, w=b: w.config(bg=self.T["SIDEBAR_BG"]))
@@ -234,10 +221,10 @@ class Dashboard:
         tk.Frame(self._sidebar, bg=self.T["SIDEBAR_BG"]).pack(fill="both", expand=True)
 
         lo = tk.Button(self._sidebar, text="🚪   Logout",
-                    font=("Arial", 11), bg=self.T["SIDEBAR_BG"],
-                    fg=self.T["DANGER"], relief="flat",
-                    anchor="w", padx=18, pady=9, cursor="hand2",
-                    command=self._logout)
+                       font=("Arial", 11), bg=self.T["SIDEBAR_BG"],
+                       fg=self.T["DANGER"], relief="flat",
+                       anchor="w", padx=18, pady=9, cursor="hand2",
+                       command=self._logout)
         lo.pack(fill="x", side="bottom")
         lo.bind("<Enter>", lambda e: lo.config(bg="#c0392b", fg="#ffffff"))
         lo.bind("<Leave>", lambda e: lo.config(bg=self.T["SIDEBAR_BG"], fg=self.T["DANGER"]))
@@ -245,12 +232,11 @@ class Dashboard:
     def _logout(self):
         if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
             self._log(f"User '{self.current_user}' logged out")
-            self.current_user = None  # reset session
-
-            # Clear the window and rebuild login
-            for widget in self.root.winfo_children():
-                widget.destroy()
-            self._build_main()
+            self.current_user = None
+            if self.on_logout:
+                self.on_logout()
+            elif self.root.winfo_exists():
+                self.root.destroy()
 
             # ═════════════════════════════════════════════════════════════════════
     # DASHBOARD
@@ -333,7 +319,8 @@ class Dashboard:
     # ═════════════════════════════════════════════════════════════════════
     YEAR_LEVELS = ["1","2","3","4"]
     STATUSES    = ["Regular","Irregular","LOA"]
-    OVER_ALL = [("General Weighted Average" , "g_ave")]
+    GRADE_SUBJS = [("Mathematics","g_math"),("Science","g_sci"),
+                   ("English","g_eng"),("Programming","g_prog")]
 
     def _show_form(self, prefill: dict | None = None):
         self._clear_content()
@@ -388,13 +375,13 @@ class Dashboard:
 
         # Grades
         base = (len(FIELDS)//2 + len(FIELDS)%2) * 2
-        tk.Label(body, text="General Weighted Average (0 – 100)",
+        tk.Label(body, text="Academic Grades (0 – 100)",
                  font=("Arial", 10, "bold"),
                  bg=self.T["CARD"], fg=self.T["ACCENT"]).grid(
             row=base, column=0, columnspan=4, sticky="w", pady=(18,4))
         ttk.Separator(body).grid(row=base+1, column=0, columnspan=4,
                                  sticky="ew", pady=(0,8))
-        for i, (lbl, key) in enumerate(self.OVER_ALL):
+        for i, (lbl, key) in enumerate(self.GRADE_SUBJS):
             r, ci = divmod(i, 2); c = ci * 2
             tk.Label(body, text=lbl, font=("Arial", 9),
                      bg=self.T["CARD"], fg=self.T["TEXT"],
@@ -454,7 +441,7 @@ class Dashboard:
 
             # Grades
             grades = {}
-            for subj, key in self.OVER_ALL:
+            for subj, key in self.GRADE_SUBJS:
                 raw = self.form_vars[key].get().strip()
                 try:
                     g = float(raw)
@@ -667,7 +654,7 @@ class Dashboard:
 
         gf = tk.Frame(body, bg=self.T["ROW_ODD"], pady=8, padx=14)
         gf.pack(fill="x")
-        for subj, key in self.OVER_ALL:
+        for subj, key in self.GRADE_SUBJS:
             gr = tk.Frame(gf, bg=self.T["ROW_ODD"]); gr.pack(fill="x", pady=2)
             tk.Label(gr, text=subj, font=("Arial", 9),
                      bg=self.T["ROW_ODD"], fg=self.T["TEXT"],
@@ -884,25 +871,27 @@ class Dashboard:
                   bg=self.T["DANGER"]).pack(side="right")
 
         tf = self._card(self._content)
-        tf.pack(fill="both", expand=True, padx=20, pady=(0,10))
-        cols = ("#","Timestamp","Action")
+        tf.pack(fill="both", expand=True, padx=20, pady=(0, 10))
+        cols = ("#", "Timestamp", "Action")
         lt = ttk.Treeview(tf, columns=cols, show="headings", selectmode="browse")
         vsb = ttk.Scrollbar(tf, orient="vertical", command=lt.yview)
         lt.configure(yscrollcommand=vsb.set)
         vsb.pack(side="right", fill="y")
         lt.pack(fill="both", expand=True)
         self._style_tree()
-        for col, w, anchor in [("#",40,"center"),
-                                ("Timestamp",160,"center"),
-                                ("Action",700,"w")]:
+        for col, w, anchor in [
+            ("#", 46, "center"),
+            ("Timestamp", 170, "center"),
+            ("Action", 500, "center")
+        ]:
             lt.heading(col, text=col)
             lt.column(col, width=w, anchor=anchor, minwidth=30)
-        lt.tag_configure("odd",  background=self.T["ROW_ODD"])
+        lt.tag_configure("odd", background=self.T["ROW_ODD"])
         lt.tag_configure("even", background=self.T["ROW_EVEN"])
         if self.activity_log:
             for i, entry in enumerate(self.activity_log):
-                lt.insert("", "end", tags=("odd" if i%2 else "even",),
-                          values=(i+1, entry["timestamp"], entry["action"]))
+                lt.insert("", "end", tags=("odd" if i % 2 else "even",),
+                          values=(i + 1, entry["timestamp"], entry["action"]))
         else:
             tk.Label(tf, text="No activity recorded yet.",
                      font=("Arial", 10), bg=self.T["CARD"],
@@ -917,12 +906,75 @@ class Dashboard:
     # ═════════════════════════════════════════════════════════════════════
     # SETTINGS
     # ═════════════════════════════════════════════════════════════════════
-    
     def _show_settings(self):
         self._clear_content()
         self._header(self._content, "⚙️   Settings")
         _, inner = self._scrollable(self._content)
-       # ── Change Credentials ──
+
+        # ── System Info ──
+        c1 = self._card(inner); c1.pack(padx=40, pady=24, fill="x")
+        tk.Label(c1, text="System Information", font=("Arial", 12, "bold"),
+                 bg=self.T["CARD"], fg=self.T["TEXT"]).pack(
+            anchor="w", padx=24, pady=(18,6))
+        ttk.Separator(c1).pack(fill="x", padx=20)
+        f1 = tk.Frame(c1, bg=self.T["CARD"], padx=28, pady=14); f1.pack(fill="x")
+        for lbl, val in [
+            ("System Name",    "Student Information System"),
+            ("Version",        "3.0.0"),
+            ("Current User",   self.current_user),
+            ("Total Students", str(len(self.students))),
+            ("Total Courses",  str(len(self.courses_data))),
+            ("Log Entries",    str(len(self.activity_log))),
+            ("Date",           datetime.date.today().strftime("%B %d, %Y")),
+        ]:
+            r = tk.Frame(f1, bg=self.T["CARD"]); r.pack(fill="x", pady=3)
+            tk.Label(r, text=lbl+":", font=("Arial", 9, "bold"),
+                     bg=self.T["CARD"], fg=self.T["ACCENT"],
+                     width=16, anchor="w").pack(side="left")
+            tk.Label(r, text=val, font=("Arial", 10),
+                     bg=self.T["CARD"], fg=self.T["TEXT"]).pack(side="left")
+
+        # ── Appearance ──
+        c2 = self._card(inner); c2.pack(padx=40, pady=(0,16), fill="x")
+        tk.Label(c2, text="Appearance", font=("Arial", 12, "bold"),
+                 bg=self.T["CARD"], fg=self.T["TEXT"]).pack(
+            anchor="w", padx=24, pady=(18,6))
+        ttk.Separator(c2).pack(fill="x", padx=20)
+        f2 = tk.Frame(c2, bg=self.T["CARD"], padx=28, pady=14); f2.pack(fill="x")
+        tk.Label(f2, text="Theme:", font=("Arial", 10),
+                 bg=self.T["CARD"], fg=self.T["TEXT"]).pack(side="left", padx=(0,12))
+        self._theme_var = tk.StringVar(value=self.theme_name)
+        for t in ("light","dark"):
+            tk.Radiobutton(f2, text=t.capitalize(), variable=self._theme_var,
+                           value=t, bg=self.T["CARD"], fg=self.T["TEXT"],
+                           selectcolor=self.T["ACCENT"],
+                           activebackground=self.T["CARD"],
+                           font=("Arial", 10)).pack(side="left", padx=6)
+        self._btn(f2, "Apply", self._apply_theme_setting,
+                  bg=self.T["ACCENT"]).pack(side="left", padx=12)
+
+        # ── Confirmations ──
+        c3 = self._card(inner); c3.pack(padx=40, pady=(0,16), fill="x")
+        tk.Label(c3, text="Confirmation Dialogs", font=("Arial", 12, "bold"),
+                 bg=self.T["CARD"], fg=self.T["TEXT"]).pack(
+            anchor="w", padx=24, pady=(18,6))
+        ttk.Separator(c3).pack(fill="x", padx=20)
+        f3 = tk.Frame(c3, bg=self.T["CARD"], padx=28, pady=14); f3.pack(fill="x")
+        self._conf_del_var = tk.BooleanVar(value=self.confirm_del)
+        self._conf_upd_var = tk.BooleanVar(value=self.confirm_upd)
+        for text, var in [
+            ("Confirm before deleting a student record",  self._conf_del_var),
+            ("Confirm before updating a student record",  self._conf_upd_var),
+        ]:
+            tk.Checkbutton(f3, text=text, variable=var,
+                           bg=self.T["CARD"], fg=self.T["TEXT"],
+                           selectcolor=self.T["ACCENT"],
+                           activebackground=self.T["CARD"],
+                           font=("Arial", 10)).pack(anchor="w", pady=2)
+        self._btn(f3, "Save Preferences", self._save_prefs,
+                  bg=self.T["SUCCESS"]).pack(anchor="w", pady=(10,0))
+
+        # ── Change Credentials ──
         c4 = self._card(inner); c4.pack(padx=40, pady=(0,28), fill="x")
         tk.Label(c4, text="Change Account Credentials",
                  font=("Arial", 12, "bold"),
@@ -982,24 +1034,24 @@ class Dashboard:
                 raise ValueError("New username cannot be blank.")
             if len(new_user) < 3:
                 raise ValueError("Username must be at least 3 characters.")
-            if USERS.get(self.current_user) != cur:
+            if self.users.get(self.current_user) != cur:
                 raise PermissionError("Current password is incorrect.")
             if new_pw or conf:
                 if len(new_pw) < 6:
                     raise ValueError("New password must be at least 6 characters.")
                 if new_pw != conf:
                     raise ValueError("New passwords do not match.")
-            if new_user != self.current_user and new_user in USERS:
+            if new_user != self.current_user and new_user in self.users:
                 raise ValueError(f"Username '{new_user}' is already taken.")
 
             old_user = self.current_user
-            old_pw   = USERS[old_user]
+            old_pw   = self.users[old_user]
             final_pw = new_pw if new_pw else old_pw
 
             if new_user != old_user:
-                del USERS[old_user]
+                del self.users[old_user]
                 self._log(f"Username changed from '{old_user}' to '{new_user}'")
-            USERS[new_user] = final_pw
+            self.users[new_user] = final_pw
             self.current_user = new_user
             if new_pw:
                 self._log("Password updated")
@@ -1015,8 +1067,10 @@ class Dashboard:
         except Exception as e:
             messagebox.showerror("❌ Error", f"Unexpected error:\n{e}")
 
+
+
 # ── Entry point ───────────────────────────────────────────────────────────
-if __name__ == "__main__": 
+if __name__ == "__main__":
     root = tk.Tk()
     Dashboard(root)
     root.mainloop()
