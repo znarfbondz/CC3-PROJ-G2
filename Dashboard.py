@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import datetime
-
+from PIL import Image, ImageTk
 # ── Themes ────────────────────────────────────────────────────────────────
 THEMES: dict[str, dict] = {
     "light": {
@@ -30,7 +30,7 @@ class Dashboard:
         self.username = username
         self.root.title("V-SMART")
         self.root.title(f"V-SMART: VALENZUELA STUDENT MANAGEMENT AND RECORDS TECHNOLOGY - {self.username}" if self.username else "V-SMART: VALENZUELA STUDENT MANAGEMENT AND RECORDS TECHNOLOGY")
-        self.theme_name = "dark"
+        self.theme_name = "light"
         self.T = THEMES[self.theme_name].copy()
         self.root.geometry("1230x720")
         self.root.minsize(950, 620)
@@ -50,7 +50,7 @@ class Dashboard:
         self.current_user  = ""
         self._edit_idx: int | None = None
         self.form_vars:    dict[str, tk.StringVar] = {}
-        self.theme_name    = "dark"
+        self.theme_name    = "light"
         self.confirm_del   = True
         self.confirm_upd   = True
         self.T             = THEMES["light"].copy()
@@ -165,18 +165,53 @@ class Dashboard:
         self._show_dashboard()
 
     def _build_sidebar(self):
+    # Load and display logo image
+    
         logo = tk.Frame(self._sidebar, bg=self.T["ACCENT"], height=80)
-        logo.pack(fill="x"); logo.pack_propagate(False)
-        tk.Label(logo, text="🎓   V-SMART", font=("Arial", 17, "bold"),
-                 bg=self.T["ACCENT"], fg="#ffffff").pack(expand=True)
+        logo.pack(fill="x")
+        logo.pack_propagate(False)
+    
+        try:
+            image_path = "C:\\CC3-IMAGES\\download.png"  # Replace with your image path
+            
+            # Open and resize the image
+            original_image = Image.open(image_path)
+            
+            # Calculate appropriate size (maintain aspect ratio)
+            # The frame height is 80, so we'll resize to fit with some padding
+            target_height = 65
+            aspect_ratio = original_image.width / original_image.height
+            target_width = int(target_height * aspect_ratio)
+            
+            # Don't exceed frame width (max 225px for sidebar)
+            if target_width > 200:
+                target_width = 200
+                target_height = int(200 / aspect_ratio)
+            
+            resized_image = original_image.resize((target_width, target_height), Image.Resampling.LANCZOS)
+            logo_image = ImageTk.PhotoImage(resized_image)
+            
+            # Display image
+            img_label = tk.Label(logo, image=logo_image, bg=self.T["ACCENT"])
+            img_label.image = logo_image  # Keep reference to prevent garbage collection
+            img_label.pack(expand=True)
+            
+        except Exception as e:
+            # Fallback to text logo if image fails to load
+            print(f"Could not load logo image: {e}")
+            tk.Label(logo, text="🎓   V-SMART", font=("Arial", 17, "bold"),
+                    bg=self.T["ACCENT"], fg="#ffffff").pack(expand=True)
+        
+        # User info frame 
         uframe = tk.Frame(self._sidebar, bg=self.T["SIDEBAR_BG"], pady=7)
         uframe.pack(fill="x")
         tk.Label(uframe, text=f"👤  {self.current_user}",
-                 font=("Arial", 10), bg=self.T["SIDEBAR_BG"],
-                 fg="#aed6f1").pack()
+                font=("Arial", 10), bg=self.T["SIDEBAR_BG"],
+                fg="#aed6f1").pack()
 
         ttk.Separator(self._sidebar).pack(fill="x", padx=10, pady=4)
 
+        # Navigation buttons (unchanged from your original code)
         nav = [
             ("📊   Dashboard",    self._show_dashboard),
             ("➕   Add Student",  lambda: self._show_form()),
@@ -187,11 +222,11 @@ class Dashboard:
         ]
         for txt, cmd in nav:
             b = tk.Button(self._sidebar, text=txt, font=("Arial", 11),
-                          bg=self.T["SIDEBAR_BG"], fg=self.T["SIDEBAR_FG"],
-                          relief="flat", anchor="w", padx=18, pady=9,
-                          cursor="hand2",
-                          activebackground=self.T["SIDEBAR_HV"],
-                          command=cmd)
+                        bg=self.T["SIDEBAR_BG"], fg=self.T["SIDEBAR_FG"],
+                        relief="flat", anchor="w", padx=18, pady=9,
+                        cursor="hand2",
+                        activebackground=self.T["SIDEBAR_HV"],
+                        command=cmd)
             b.pack(fill="x")
             b.bind("<Enter>", lambda e, w=b: w.config(bg=self.T["SIDEBAR_HV"]))
             b.bind("<Leave>", lambda e, w=b: w.config(bg=self.T["SIDEBAR_BG"]))
@@ -199,10 +234,10 @@ class Dashboard:
         tk.Frame(self._sidebar, bg=self.T["SIDEBAR_BG"]).pack(fill="both", expand=True)
 
         lo = tk.Button(self._sidebar, text="🚪   Logout",
-                       font=("Arial", 11), bg=self.T["SIDEBAR_BG"],
-                       fg=self.T["DANGER"], relief="flat",
-                       anchor="w", padx=18, pady=9, cursor="hand2",
-                       command=self._logout)
+                    font=("Arial", 11), bg=self.T["SIDEBAR_BG"],
+                    fg=self.T["DANGER"], relief="flat",
+                    anchor="w", padx=18, pady=9, cursor="hand2",
+                    command=self._logout)
         lo.pack(fill="x", side="bottom")
         lo.bind("<Enter>", lambda e: lo.config(bg="#c0392b", fg="#ffffff"))
         lo.bind("<Leave>", lambda e: lo.config(bg=self.T["SIDEBAR_BG"], fg=self.T["DANGER"]))
@@ -632,7 +667,7 @@ class Dashboard:
 
         gf = tk.Frame(body, bg=self.T["ROW_ODD"], pady=8, padx=14)
         gf.pack(fill="x")
-        for subj, key in self.GRADE_SUBJS:
+        for subj, key in self.OVER_ALL:
             gr = tk.Frame(gf, bg=self.T["ROW_ODD"]); gr.pack(fill="x", pady=2)
             tk.Label(gr, text=subj, font=("Arial", 9),
                      bg=self.T["ROW_ODD"], fg=self.T["TEXT"],
