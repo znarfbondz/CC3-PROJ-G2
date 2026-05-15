@@ -631,10 +631,6 @@ class Dashboard:
         action_tb = tk.Frame(self._content, bg=self.T["BG"], pady=5)
         action_tb.pack(fill="x", padx=20)
 
-        self._btn(left, "➕ Add New",
-                  lambda: self._show_form(),
-                  bg=self.T["SUCCESS"]).pack(side="left", padx=2)
-
         self._btn(action_tb, "👁 View Details", self._view_details,
                   bg=self.T["ACCENT"]).pack(side="left", padx=2)
 
@@ -643,6 +639,10 @@ class Dashboard:
 
         self._btn(action_tb, "🗑️ Delete", self._delete_student,
                   bg=self.T["DANGER"]).pack(side="left", padx=2)
+
+        self._btn(action_tb, "➕ Add New",
+                  lambda: self._show_form(),
+                  bg=self.T["SUCCESS"]).pack(side="left", padx=2)
 
 
 
@@ -808,8 +808,13 @@ class Dashboard:
         tk.Label(tb, text=f"{len(self.courses_data)} courses registered",
                  font=("Arial", 10), bg=self.T["BG"],
                  fg=self.T["GRAY"]).pack(side="left")
-        self._btn(tb, "➕ Add Course", self._add_course_dialog,
-                  bg=self.T["SUCCESS"]).pack(side="right")
+
+        ab = tk.Frame(self._content, bg=self.T["BG"], pady=7)
+        ab.pack(fill="x", padx=20)
+        self._btn(ab, "✏️ Edit Course", self._edit_course, bg=self.T["WARNING"]).pack(side="left", padx=(0, 6))
+        self._btn(ab, "🗑️ Delete Course", self._delete_course, bg=self.T["DANGER"]).pack(side="left", padx=(0, 6))
+        self._btn(ab, "➕ Add Course", self._add_course_dialog,
+                  bg=self.T["SUCCESS"]).pack(side="left")
 
         tf = self._card(self._content)
         tf.pack(fill="both", expand=True, padx=20, pady=(4,0))
@@ -828,11 +833,6 @@ class Dashboard:
         self._ctree.tag_configure("even", background=self.T["ROW_EVEN"])
         self._refresh_ctree()
 
-        ab = tk.Frame(self._content, bg=self.T["BG"], pady=7)
-        ab.pack(fill="x", padx=20)
-        self._btn(ab, "✏️ Edit Course",   self._edit_course,   bg=self.T["WARNING"]).pack(side="left", padx=(0,6))
-        self._btn(ab, "🗑️ Delete Course", self._delete_course, bg=self.T["DANGER"]).pack(side="left")
-        self._ctree.bind("<Double-1>", lambda e: self._edit_course())
 
     def _refresh_ctree(self):
         self._ctree.delete(*self._ctree.get_children())
