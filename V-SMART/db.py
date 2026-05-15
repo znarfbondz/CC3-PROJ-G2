@@ -199,15 +199,12 @@ def student_id_taken(student_id: str, exclude_id: str | None = None) -> bool:
 
 DEFAULT_COURSES = [
     ("BSIT",   "BS Information Technology",   "Prof. Reyes",     180),
-    ("BSCS",   "BS Computer Science",          "Prof. Santos",    180),
     ("BSCE",   "BS Civil Engineering",         "Prof. Dela Cruz", 192),
     ("BSEd",   "BS Education",                 "Prof. Garcia",    156),
     ("BSBA",   "BS Business Administration",   "Prof. Torres",    168),
-    ("BSN",    "BS Nursing",                   "Prof. Lim",       200),
-    ("BSME",   "BS Mechanical Engineering",    "Prof. Bautista",  192),
     ("BSEE",   "BS Electrical Engineering",    "Prof. Mendoza",   192),
-    ("BSARCH", "BS Architecture",              "Prof. Cruz",      204),
 ]
+
 
 
 def seed_courses():
