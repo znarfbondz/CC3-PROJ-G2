@@ -11,7 +11,7 @@ except ImportError:
 # ----------Details--------------
 APP_TITLE = "V-SMART: Valenzuela Student Management and Records Technology"
 WINDOW_W, WINDOW_H = 1100, 650
-BG_PATH = "C:\\Users\\abelx\\OneDrive\\Pictures\\Screenshot 2026-05-11 231939.png"
+BG_PATH = "Screenshot 2026-05-11 231939.png"
 WHITE_PANEL = "white"
 BUTTON_BG = "#359bfc"
 TEXT_COLOR = "#0f172a"
@@ -38,49 +38,6 @@ FONT_LABEL = ("Courier New", 9, "bold")
 FONT_INPUT = ("Courier New", 11)
 FONT_BTN = ("Georgia", 11, "bold")
 FONT_SMALL = ("Courier New", 8)
-
-
-# ───── Password Visibility Toggle ─────
-class PasswordToggleButton:
-    """Custom eye icon button for password visibility toggle"""
-
-    def __init__(self, parent, entry_widget, bg_color="#0c1830"):
-        self.entry = entry_widget
-        self.bg_color = bg_color
-        self.is_visible = False
-
-        # Create eye icons using Unicode
-        self.eye_open = "👁"
-        self.eye_closed = "👁‍🗨"
-
-        self.button = tk.Button(
-            parent,
-            text=self.eye_closed,
-            bg=bg_color,
-            fg=C_MUTED,
-            relief="flat",
-            bd=0,
-            padx=8,
-            cursor="hand2",
-            font=("Arial", 11),
-            activebackground=bg_color,
-            activeforeground=C_GLOW,
-            command=self.toggle_visibility
-        )
-
-    def toggle_visibility(self):
-        """Toggle password visibility"""
-        self.is_visible = not self.is_visible
-
-        if self.is_visible:
-            self.entry.config(show="")
-            self.button.config(text=self.eye_open, fg=C_ACCENT)
-        else:
-            self.entry.config(show="●")
-            self.button.config(text=self.eye_closed, fg=C_MUTED)
-
-    def get_button(self):
-        return self.button
 
 
 # ------------LOGINPAGE------------
@@ -115,6 +72,8 @@ class LoginPage(tk.Tk):
         self.bind("<Configure>", self._on_resize)
         self.bind("<Return>", lambda _e: self._handle_login())
 
+        self.protocol("WM_DELETE_WINDOW", self._confirm_exit)
+
     # ---------- Background ----------
     def _load_background(self):
         if os.path.exists(BG_PATH):
@@ -146,7 +105,7 @@ class LoginPage(tk.Tk):
         accent_bar.pack(fill="x", padx=0, pady=(0, 24))
 
         # ── Logo ──
-        LOGO_PATH = "C:\\Users\\abelx\OneDrive\\Pictures\\download.png"
+        LOGO_PATH = "download.png"
         if os.path.exists(LOGO_PATH):
             try:
                 raw = Image.open(LOGO_PATH).resize((72, 72), Image.LANCZOS)
@@ -184,7 +143,7 @@ class LoginPage(tk.Tk):
         self.user_var = tk.StringVar()
         self.pass_var = tk.StringVar()
         self._user_entry = self._build_field(card, "USERNAME", self.user_var, show=None)
-        self._pass_entry, self.password_toggle = self._build_password_field(card, "PASSWORD", self.pass_var)
+        self._pass_entry = self._build_field(card, "PASSWORD", self.pass_var, show="●")
 
         # ── Login Button ──
         self._build_button(card)
@@ -227,39 +186,6 @@ class LoginPage(tk.Tk):
         entry.bind("<FocusOut>", lambda e, f=frame: f.configure(highlightbackground=C_INPUT_BD))
         return entry
 
-    def _build_password_field(self, parent, label_text, var):
-        """ password field with visibility toggle button"""
-        container = tk.Frame(parent, bg=C_PANEL)
-        container.pack(fill="x", pady=(0, 12))
-
-        tk.Label(container, text=label_text, bg=C_PANEL, fg=C_MUTED,
-                 font=FONT_LABEL, anchor="w").pack(fill="x")
-
-        # Frame to hold entry and toggle button
-        frame = tk.Frame(container, bg=C_INPUT_BG,
-                         highlightthickness=1, highlightbackground=C_INPUT_BD)
-        frame.pack(fill="x", pady=(3, 0))
-
-        # Password entry
-        entry = tk.Entry(frame, textvariable=var,
-                         bg=C_INPUT_BG, fg=C_WHITE,
-                         insertbackground=C_GLOW,
-                         relief="flat", font=FONT_INPUT,
-                         show="●",
-                         bd=8)
-        entry.pack(side="left", fill="both", expand=True)
-
-        # Focus glow effect
-        entry.bind("<FocusIn>", lambda e, f=frame: f.configure(highlightbackground=C_INPUT_FOC))
-        entry.bind("<FocusOut>", lambda e, f=frame: f.configure(highlightbackground=C_INPUT_BD))
-
-        # Password visibility toggle button
-        toggle = PasswordToggleButton(frame, entry, bg_color=C_INPUT_BG)
-        toggle_btn = toggle.get_button()
-        toggle_btn.pack(side="right", padx=4, pady=4)
-
-        return entry, toggle
-
     def _build_button(self, parent):
         self._btn_frame = tk.Frame(parent, bg=C_ACCENT,
                                    highlightthickness=0)
@@ -279,6 +205,8 @@ class LoginPage(tk.Tk):
 
         self._btn.bind("<Enter>", lambda e: self._btn.config(bg=C_BTN_HVR))
         self._btn.bind("<Leave>", lambda e: self._btn.config(bg=C_ACCENT))
+
+    # ───── Slide-in animation (FIXED) ─────
 
     # ───── Login logic ─────
     def _handle_login(self):
@@ -312,6 +240,14 @@ class LoginPage(tk.Tk):
             self._btn.config(text="LOG  IN  →", bg="#1e6bff")
         self.user_var.set("")
         self.pass_var.set("")
+
+    def _confirm_exit(self):
+        confirm = messagebox.askyesno(
+            "Exit Confirmation",
+            "Are you sure you want to quit?"
+        )
+        if confirm:
+            self.destroy()
 
 
 LoginPage().mainloop()

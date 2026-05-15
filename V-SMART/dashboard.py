@@ -587,19 +587,48 @@ class Dashboard:
         # Toolbar
         tb = tk.Frame(self._content, bg=self.T["BG"], pady=8)
         tb.pack(fill="x", padx=20)
-        tk.Label(tb, text="🔍 Search by ID:", font=("Arial", 10),
+
+        left = tk.Frame(tb, bg=self.T["BG"])
+        left.pack(side="left")
+
+        tk.Label(left, text="🔍 Search by ID:", font=("Arial", 10),
                  bg=self.T["BG"], fg=self.T["TEXT"]).pack(side="left")
+
         sv = tk.StringVar(value=term)
-        se = self._entry(tb, sv, width=26)
+        se = self._entry(left, sv, width=26)
         se.pack(side="left", padx=6, ipady=4)
-        se.focus()
-        se.bind("<Return>", lambda e: self._show_records(sv.get()))
-        self._btn(tb, "Search",   lambda: self._show_records(sv.get()),
+
+        self._btn(left, "Search",
+                  lambda: self._show_records(sv.get()),
                   bg=self.T["ACCENT"]).pack(side="left", padx=2)
-        self._btn(tb, "Clear",    lambda: self._show_records(""),
+
+        self._btn(left, "Clear",
+                  lambda: self._show_records(""),
                   bg=self.T["GRAY"]).pack(side="left", padx=2)
-        self._btn(tb, "➕ Add New", lambda: self._show_form(),
-                  bg=self.T["SUCCESS"]).pack(side="right")
+
+
+
+        right = tk.Frame(tb, bg=self.T["BG"])
+        right.pack(side="right")
+
+
+        action_tb = tk.Frame(self._content, bg=self.T["BG"], pady=5)
+        action_tb.pack(fill="x", padx=20)
+
+        self._btn(left, "➕ Add New",
+                  lambda: self._show_form(),
+                  bg=self.T["SUCCESS"]).pack(side="left", padx=2)
+
+        self._btn(action_tb, "👁 View Details", self._view_details,
+                  bg=self.T["ACCENT"]).pack(side="left", padx=2)
+
+        self._btn(action_tb, "✏️ Update", self._update_student,
+                  bg=self.T["WARNING"]).pack(side="left", padx=2)
+
+        self._btn(action_tb, "🗑️ Delete", self._delete_student,
+                  bg=self.T["DANGER"]).pack(side="left", padx=2)
+
+
 
         # Table
         tf = self._card(self._content)
@@ -640,15 +669,7 @@ class Dashboard:
                                       s["year_level"], s.get("status","Regular"),
                                       s.get("section",""), s.get("date_added","")))
 
-        # Action bar
-        ab = tk.Frame(self._content, bg=self.T["BG"], pady=7)
-        ab.pack(fill="x", padx=20)
-        self._btn(ab, "👁 View Details", self._view_details,   bg=self.T["ACCENT"]).pack(side="left", padx=(0,6))
-        self._btn(ab, "✏️ Update",       self._update_student, bg=self.T["WARNING"]).pack(side="left", padx=(0,6))
-        self._btn(ab, "🗑️ Delete",       self._delete_student, bg=self.T["DANGER"]).pack(side="left")
-        tk.Label(ab, text=f"Showing {len(shown)} / {len(self.students)} records",
-                 font=("Arial", 9), bg=self.T["BG"], fg=self.T["GRAY"]).pack(side="right")
-        self._tree.bind("<Double-1>", lambda e: self._view_details())
+
 
     def _sort_tree(self, col: str):
         if self._sort_col == col:
