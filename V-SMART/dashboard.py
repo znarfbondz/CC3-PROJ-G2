@@ -50,6 +50,7 @@ class Dashboard:
         self.T = THEMES[self.theme_name].copy()
         self.root.geometry("1230x720")
         self.root.minsize(950, 620)
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
         ttk.Style().theme_use("clam")
 
@@ -74,6 +75,7 @@ class Dashboard:
         self.root.configure(bg=self.T["BG"])
         self._build_main()
 
+
     # ─────────────────────────────────────────────────────────────────────
     # HELPERS
     # ─────────────────────────────────────────────────────────────────────
@@ -83,6 +85,26 @@ class Dashboard:
         if len(self.activity_log) > 300:
             self.activity_log = self.activity_log[:300]
         db.log_action(action, ts)
+
+    def _on_close(self):
+        if messagebox.askyesno("Exit", "Are you sure you want to exit?"):
+            try:
+                self._log(f"User '{self.current_user}' exited the app")
+            except:
+                pass
+            self.root.destroy()
+
+    def _logout(self):
+        if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
+            try:
+                self._log(f"User '{self.current_user}' logged out")
+            except:
+                pass
+
+            if self.on_logout:
+                self.on_logout()
+
+            self.root.destroy()
 
     @property
     def _course_codes(self) -> list[str]:
@@ -254,12 +276,6 @@ class Dashboard:
         tk.Label(parent, text="SIS", font=("Arial", 17, "bold"),
                  bg=self.T["ACCENT"], fg="#ffffff").pack(expand=True)
 
-    def _logout(self):
-        if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
-            self._log(f"User '{self.current_user}' logged out")
-            self.root.destroy()
-            if self.on_logout:
-                self.on_logout()
 
     # ═════════════════════════════════════════════════════════════════════
     # DASHBOARD
@@ -1114,6 +1130,9 @@ class Dashboard:
             messagebox.showerror("❌ Error", f"Unexpected error:\n{e}")
 
 
+
+        if self.on_logout:
+            self.on_logout()
 
 # ── Entry point ───────────────────────────────────────────────────────
 if __name__ == "__main__":
