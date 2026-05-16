@@ -60,6 +60,8 @@ class Dashboard:
         self.activity_log: list[dict] = []
 
         # Load from database
+        db.init()
+        db.seed_courses()
         self.students = db.load_students()
         self.courses_data = db.load_courses()
         self.activity_log = db.load_activity_log()
@@ -92,10 +94,16 @@ class Dashboard:
                 self._log(f"User '{self.current_user}' exited the app")
             except:
                 pass
+            parent = getattr(self.root, "master", None)
             self.root.destroy()
+            if parent is not None:
+                try:
+                    parent.destroy()
+                except tk.TclError:
+                    pass
 
     def _logout(self):
-        if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
+        if messagebox.askyesno("Logout", "Are you sure you want to continue?"):
             try:
                 self._log(f"User '{self.current_user}' logged out")
             except:
@@ -232,6 +240,7 @@ class Dashboard:
         ttk.Separator(self._sidebar).pack(fill="x", padx=10, pady=4)
 
         nav = [
+            ("Reports", self._show_reports),
             ("📊   Dashboard",    self._show_dashboard),
             ("➕   Add Student",  lambda: self._show_form()),
             ("📋   View Records", self._show_records),
@@ -356,6 +365,148 @@ class Dashboard:
     # ═════════════════════════════════════════════════════════════════════
     # ENROLLMENT FORM  (add / edit)
     # ═════════════════════════════════════════════════════════════════════
+    # REPORTS / ANALYTICS
+    def _safe_gwa(self, student: dict) -> float | None:
+        try:
+            return float(student.get("GWA", ""))
+        except (TypeError, ValueError):
+            return None
+
+    def _count_by(self, key: str, fallback: str = "Unassigned") -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for student in self.students:
+            value = str(student.get(key, "")).strip() or fallback
+            counts[value] = counts.get(value, 0) + 1
+        return counts
+
+    def _report_stat_card(self, parent, label: str, value: str, color: str, col: int):
+        card = self._card(parent)
+        card.grid(row=0, column=col, padx=6, sticky="nsew")
+        parent.grid_columnconfigure(col, weight=1)
+        tk.Label(card, text=label, font=("Arial", 9),
+                 bg=self.T["CARD"], fg=self.T["GRAY"]).pack(pady=(12, 3), padx=8)
+        tk.Label(card, text=value, font=("Arial", 18, "bold"),
+                 bg=self.T["CARD"], fg=color).pack(pady=(0, 12), padx=8)
+
+    def _bar_row(self, parent, label: str, count: int, max_count: int,
+                 color: str):
+        row = tk.Frame(parent, bg=self.T["CARD"])
+        row.pack(fill="x", padx=16, pady=5)
+
+        tk.Label(row, text=label, font=("Arial", 9),
+                 bg=self.T["CARD"], fg=self.T["TEXT"],
+                 width=18, anchor="w").pack(side="left")
+
+        bar_area = tk.Frame(row, bg=self.T["ROW_ODD"], height=18, width=260)
+        bar_area.pack(side="left", fill="x", expand=True, padx=(6, 10))
+        bar_area.pack_propagate(False)
+
+        width = 0 if max_count <= 0 else max(8, int(260 * (count / max_count)))
+        tk.Frame(bar_area, bg=color, width=width, height=18).pack(side="left")
+
+        tk.Label(row, text=str(count), font=("Arial", 9, "bold"),
+                 bg=self.T["CARD"], fg=self.T["TEXT"],
+                 width=4, anchor="e").pack(side="right")
+
+    def _bar_section(self, parent, title: str, counts: dict[str, int],
+                     color: str, empty_text: str = "No data available."):
+        card = self._card(parent)
+        card.pack(side="left", fill="both", expand=True, padx=8)
+        tk.Label(card, text=title, font=("Arial", 12, "bold"),
+                 bg=self.T["CARD"], fg=self.T["TEXT"]).pack(
+            anchor="w", padx=16, pady=(14, 6))
+        ttk.Separator(card).pack(fill="x", padx=14, pady=(0, 8))
+
+        if not counts:
+            tk.Label(card, text=empty_text, font=("Arial", 9),
+                     bg=self.T["CARD"], fg=self.T["GRAY"]).pack(pady=18)
+            return
+
+        max_count = max(counts.values())
+        for label, count in sorted(counts.items(), key=lambda item: (-item[1], item[0])):
+            self._bar_row(card, label, count, max_count, color)
+
+    def _show_reports(self):
+        self._clear_content()
+        self._header(self._content, "Reports / Analytics")
+        _, inner = self._scrollable(self._content)
+
+        gwa_values = [g for g in (self._safe_gwa(s) for s in self.students)
+                      if g is not None]
+        passing = sum(1 for g in gwa_values if g >= 75)
+        at_risk_students = sorted(
+            [s for s in self.students
+             if self._safe_gwa(s) is not None and self._safe_gwa(s) < 75],
+            key=lambda s: self._safe_gwa(s) or 0
+        )
+        avg_gwa = sum(gwa_values) / len(gwa_values) if gwa_values else 0
+
+        stat_row = tk.Frame(inner, bg=self.T["BG"])
+        stat_row.pack(fill="x", padx=20, pady=(20, 12))
+        stats = [
+            ("Total Students", str(len(self.students)), "#3498db"),
+            ("Average GWA", f"{avg_gwa:.2f}" if gwa_values else "N/A", self.T["ACCENT"]),
+            ("Passing", str(passing), self.T["SUCCESS"]),
+            ("At Risk", str(len(at_risk_students)), self.T["DANGER"]),
+            ("Courses", str(len(self.courses_data)), self.T["WARNING"]),
+        ]
+        for i, (label, value, color) in enumerate(stats):
+            self._report_stat_card(stat_row, label, value, color, i)
+
+        chart_row = tk.Frame(inner, bg=self.T["BG"])
+        chart_row.pack(fill="x", padx=12, pady=(4, 16))
+        self._bar_section(chart_row, "Students by Status",
+                          self._count_by("status", "Unknown"),
+                          self.T["ACCENT"])
+        self._bar_section(chart_row, "Students by Course",
+                          self._count_by("course", "No Course"),
+                          self.T["SUCCESS"])
+
+        chart_row_2 = tk.Frame(inner, bg=self.T["BG"])
+        chart_row_2.pack(fill="x", padx=12, pady=(0, 16))
+        self._bar_section(chart_row_2, "Students by Year Level",
+                          self._count_by("year_level", "No Year"),
+                          self.T["WARNING"])
+        self._bar_section(chart_row_2, "GWA Result",
+                          {
+                              "Passing": passing,
+                              "At Risk": len(at_risk_students),
+                              "No GWA": len(self.students) - len(gwa_values),
+                          },
+                          self.T["DANGER"])
+
+        tk.Label(inner, text="At-Risk Students", font=("Arial", 12, "bold"),
+                 bg=self.T["BG"], fg=self.T["TEXT"]).pack(
+            anchor="w", padx=28, pady=(8, 4))
+        tf = self._card(inner)
+        tf.pack(fill="x", padx=20, pady=(0, 20))
+        self._style_tree()
+        cols = ("Student ID", "Name", "Course", "Year", "GWA", "Status")
+        tree = ttk.Treeview(tf, columns=cols, show="headings", height=8)
+        vsb = ttk.Scrollbar(tf, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        tree.pack(fill="x", padx=8, pady=8)
+
+        for col, width in zip(cols, [110, 210, 90, 60, 70, 90]):
+            tree.heading(col, text=col)
+            tree.column(col, width=width, anchor="center", minwidth=50)
+        tree.tag_configure("odd", background=self.T["ROW_ODD"])
+        tree.tag_configure("even", background=self.T["ROW_EVEN"])
+
+        if at_risk_students:
+            for i, student in enumerate(at_risk_students[:25]):
+                gwa = self._safe_gwa(student)
+                tree.insert("", "end", tags=("odd" if i % 2 else "even",),
+                            values=(student.get("student_id", ""),
+                                    student.get("name", ""),
+                                    student.get("course", ""),
+                                    student.get("year_level", ""),
+                                    f"{gwa:.2f}" if gwa is not None else "N/A",
+                                    student.get("status", "Regular")))
+        else:
+            tree.insert("", "end", values=("", "No at-risk students found", "", "", "", ""))
+
     YEAR_LEVELS = ["1","2","3","4"]
     STATUSES    = ["Regular","Irregular","LOA"]
     OVERALL_G = [("General Weighted Average" , "GWA")]
