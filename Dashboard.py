@@ -1,7 +1,18 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import datetime
+import os
+import db
+import re
 
+try:
+    from PIL import Image, ImageTk
+except ImportError:
+    Image = None
+    ImageTk = None
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOGO_PATH = os.path.join(BASE_DIR, "C:\\Users\\abelx\\OneDrive\\Pictures\\download.png")
 # ── Themes ────────────────────────────────────────────────────────────────
 THEMES: dict[str, dict] = {
     "light": {
@@ -29,42 +40,43 @@ class Dashboard:
         self.root = root
         self.username = username
         self.on_logout = on_logout
-        self.users = users if users is not None else {"admin": "admin", "user": "1234"}
+        self.users = users if users is not None else {
+            "admin": "admin",
+            "user": "1234",
+        }
         self.root.title("Dashboard")
         self.root.title(f"Dashboard - {self.username}" if self.username else "Dashboard")
         self.theme_name = "light"
         self.T = THEMES[self.theme_name].copy()
         self.root.geometry("1230x720")
         self.root.minsize(950, 620)
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
         ttk.Style().theme_use("clam")
 
         # ── App state ──
         self.students:     list[dict] = []
-        self.courses_data: list[dict] = [
-            {"code": "BSIT",   "name": "BS Information Technology",  "instructor": "Prof. Reyes",     "units": 180},
-            {"code": "BSCS",   "name": "BS Computer Science",         "instructor": "Prof. Santos",    "units": 180},
-            {"code": "BSCE",   "name": "BS Civil Engineering",        "instructor": "Prof. Dela Cruz", "units": 192},
-            {"code": "BSEd",   "name": "BS Education",                "instructor": "Prof. Garcia",    "units": 156},
-            {"code": "BSBA",   "name": "BS Business Administration",  "instructor": "Prof. Torres",    "units": 168},
-            {"code": "BSN",    "name": "BS Nursing",                  "instructor": "Prof. Lim",       "units": 200},
-            {"code": "BSME",   "name": "BS Mechanical Engineering",   "instructor": "Prof. Bautista",  "units": 192},
-            {"code": "BSEE",   "name": "BS Electrical Engineering",   "instructor": "Prof. Mendoza",   "units": 192},
-            {"code": "BSARCH", "name": "BS Architecture",             "instructor": "Prof. Cruz",      "units": 204},
-        ]
+        self.courses_data: list[dict] = []
         self.activity_log: list[dict] = []
+
+        # Load from database
+        db.init()
+        db.seed_courses()
+        self.students = db.load_students()
+        self.courses_data = db.load_courses()
+        self.activity_log = db.load_activity_log()
+
         self.current_user = username if username else "admin"
 
         self._log(f"User '{self.current_user}' logged in")
         self._edit_idx: int | None = None
         self.form_vars:    dict[str, tk.StringVar] = {}
         self.theme_name    = "light"
-        self.confirm_del   = True
-        self.confirm_upd   = True
         self.T             = THEMES["light"].copy()
 
         self.root.configure(bg=self.T["BG"])
         self._build_main()
+
 
     # ─────────────────────────────────────────────────────────────────────
     # HELPERS
@@ -74,6 +86,33 @@ class Dashboard:
         self.activity_log.insert(0, {"action": action, "timestamp": ts})
         if len(self.activity_log) > 300:
             self.activity_log = self.activity_log[:300]
+        db.log_action(action, ts)
+
+    def _on_close(self):
+        if messagebox.askyesno("Exit", "Are you sure you want to exit?"):
+            try:
+                self._log(f"User '{self.current_user}' exited the app")
+            except:
+                pass
+            parent = getattr(self.root, "master", None)
+            self.root.destroy()
+            if parent is not None:
+                try:
+                    parent.destroy()
+                except tk.TclError:
+                    pass
+
+    def _logout(self):
+        if messagebox.askyesno("Logout", "Are you sure you want to continue?"):
+            try:
+                self._log(f"User '{self.current_user}' logged out")
+            except:
+                pass
+
+            if self.on_logout:
+                self.on_logout()
+
+            self.root.destroy()
 
     @property
     def _course_codes(self) -> list[str]:
@@ -165,8 +204,10 @@ class Dashboard:
                         lambda e: canvas.yview_scroll(-1*(e.delta//120), "units"))
         return canvas, inner
 
-    def _entry(self, parent, var, **kw):
-        return tk.Entry(parent, textvariable=var, font=("Arial", 10),
+    def _entry(self, parent, var=None, **kw):
+        if var is not None:
+            kw["textvariable"] = var
+        return tk.Entry(parent, font=("Arial", 10),
                         relief="solid", bd=1,
                         bg=self.T["ENTRY_BG"], fg=self.T["ENTRY_FG"],
                         insertbackground=self.T["ENTRY_FG"], **kw)
@@ -189,8 +230,7 @@ class Dashboard:
     def _build_sidebar(self):
         logo = tk.Frame(self._sidebar, bg=self.T["ACCENT"], height=80)
         logo.pack(fill="x"); logo.pack_propagate(False)
-        tk.Label(logo, text="🎓   SIS", font=("Arial", 17, "bold"),
-                 bg=self.T["ACCENT"], fg="#ffffff").pack(expand=True)
+        self._build_sidebar_logo(logo)
         uframe = tk.Frame(self._sidebar, bg=self.T["SIDEBAR_BG"], pady=7)
         uframe.pack(fill="x")
         tk.Label(uframe, text=f"👤  {self.current_user}",
@@ -200,6 +240,7 @@ class Dashboard:
         ttk.Separator(self._sidebar).pack(fill="x", padx=10, pady=4)
 
         nav = [
+            ("🗃️ Reports", self._show_reports),
             ("📊   Dashboard",    self._show_dashboard),
             ("➕   Add Student",  lambda: self._show_form()),
             ("📋   View Records", self._show_records),
@@ -229,16 +270,23 @@ class Dashboard:
         lo.bind("<Enter>", lambda e: lo.config(bg="#c0392b", fg="#ffffff"))
         lo.bind("<Leave>", lambda e: lo.config(bg=self.T["SIDEBAR_BG"], fg=self.T["DANGER"]))
 
-    def _logout(self):
-        if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
-            self._log(f"User '{self.current_user}' logged out")
-            self.current_user = None
-            if self.on_logout:
-                self.on_logout()
-            elif self.root.winfo_exists():
-                self.root.destroy()
+    def _build_sidebar_logo(self, parent):
+        if Image and ImageTk and os.path.exists(LOGO_PATH):
+            try:
+                raw = Image.open(LOGO_PATH).convert("RGBA")
+                raw.thumbnail((64, 64), Image.LANCZOS)
+                self._sidebar_logo_photo = ImageTk.PhotoImage(raw)
+                tk.Label(parent, image=self._sidebar_logo_photo,
+                         bg=self.T["ACCENT"]).pack(expand=True)
+                return
+            except Exception:
+                pass
 
-            # ═════════════════════════════════════════════════════════════════════
+        tk.Label(parent, text="SIS", font=("Arial", 17, "bold"),
+                 bg=self.T["ACCENT"], fg="#ffffff").pack(expand=True)
+
+
+    # ═════════════════════════════════════════════════════════════════════
     # DASHBOARD
     # ═════════════════════════════════════════════════════════════════════
     def _show_dashboard(self):
@@ -317,10 +365,151 @@ class Dashboard:
     # ═════════════════════════════════════════════════════════════════════
     # ENROLLMENT FORM  (add / edit)
     # ═════════════════════════════════════════════════════════════════════
+    # REPORTS / ANALYTICS
+    def _safe_gwa(self, student: dict) -> float | None:
+        try:
+            return float(student.get("GWA", ""))
+        except (TypeError, ValueError):
+            return None
+
+    def _count_by(self, key: str, fallback: str = "Unassigned") -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for student in self.students:
+            value = str(student.get(key, "")).strip() or fallback
+            counts[value] = counts.get(value, 0) + 1
+        return counts
+
+    def _report_stat_card(self, parent, label: str, value: str, color: str, col: int):
+        card = self._card(parent)
+        card.grid(row=0, column=col, padx=6, sticky="nsew")
+        parent.grid_columnconfigure(col, weight=1)
+        tk.Label(card, text=label, font=("Arial", 9),
+                 bg=self.T["CARD"], fg=self.T["GRAY"]).pack(pady=(12, 3), padx=8)
+        tk.Label(card, text=value, font=("Arial", 18, "bold"),
+                 bg=self.T["CARD"], fg=color).pack(pady=(0, 12), padx=8)
+
+    def _bar_row(self, parent, label: str, count: int, max_count: int,
+                 color: str):
+        row = tk.Frame(parent, bg=self.T["CARD"])
+        row.pack(fill="x", padx=16, pady=5)
+
+        tk.Label(row, text=label, font=("Arial", 9),
+                 bg=self.T["CARD"], fg=self.T["TEXT"],
+                 width=18, anchor="w").pack(side="left")
+
+        bar_area = tk.Frame(row, bg=self.T["ROW_ODD"], height=18, width=260)
+        bar_area.pack(side="left", fill="x", expand=True, padx=(6, 10))
+        bar_area.pack_propagate(False)
+
+        width = 0 if max_count <= 0 else max(8, int(260 * (count / max_count)))
+        tk.Frame(bar_area, bg=color, width=width, height=18).pack(side="left")
+
+        tk.Label(row, text=str(count), font=("Arial", 9, "bold"),
+                 bg=self.T["CARD"], fg=self.T["TEXT"],
+                 width=4, anchor="e").pack(side="right")
+
+    def _bar_section(self, parent, title: str, counts: dict[str, int],
+                     color: str, empty_text: str = "No data available."):
+        card = self._card(parent)
+        card.pack(side="left", fill="both", expand=True, padx=8)
+        tk.Label(card, text=title, font=("Arial", 12, "bold"),
+                 bg=self.T["CARD"], fg=self.T["TEXT"]).pack(
+            anchor="w", padx=16, pady=(14, 6))
+        ttk.Separator(card).pack(fill="x", padx=14, pady=(0, 8))
+
+        if not counts:
+            tk.Label(card, text=empty_text, font=("Arial", 9),
+                     bg=self.T["CARD"], fg=self.T["GRAY"]).pack(pady=18)
+            return
+
+        max_count = max(counts.values())
+        for label, count in sorted(counts.items(), key=lambda item: (-item[1], item[0])):
+            self._bar_row(card, label, count, max_count, color)
+
+    def _show_reports(self):
+        self._clear_content()
+        self._header(self._content, "🗃️ Reports / Analytics")
+        _, inner = self._scrollable(self._content)
+
+        gwa_values = [g for g in (self._safe_gwa(s) for s in self.students)
+                      if g is not None]
+        passing = sum(1 for g in gwa_values if g >= 75)
+        at_risk_students = sorted(
+            [s for s in self.students
+             if self._safe_gwa(s) is not None and self._safe_gwa(s) < 75],
+            key=lambda s: self._safe_gwa(s) or 0
+        )
+        avg_gwa = sum(gwa_values) / len(gwa_values) if gwa_values else 0
+
+        stat_row = tk.Frame(inner, bg=self.T["BG"])
+        stat_row.pack(fill="x", padx=20, pady=(20, 12))
+        stats = [
+            ("Total Students", str(len(self.students)), "#3498db"),
+            ("Average GWA", f"{avg_gwa:.2f}" if gwa_values else "N/A", self.T["ACCENT"]),
+            ("Passing", str(passing), self.T["SUCCESS"]),
+            ("At Risk", str(len(at_risk_students)), self.T["DANGER"]),
+            ("INC Students", str(len(self.students) - len(gwa_values)), self.T["WARNING"]),
+        ]
+        for i, (label, value, color) in enumerate(stats):
+            self._report_stat_card(stat_row, label, value, color, i)
+
+        chart_row = tk.Frame(inner, bg=self.T["BG"])
+        chart_row.pack(fill="x", padx=12, pady=(4, 16))
+        self._bar_section(chart_row, "Students by Status",
+                          self._count_by("status", "Unknown"),
+                          self.T["ACCENT"])
+        self._bar_section(chart_row, "Students by Course",
+                          self._count_by("course", "No Course"),
+                          self.T["SUCCESS"])
+
+        chart_row_2 = tk.Frame(inner, bg=self.T["BG"])
+        chart_row_2.pack(fill="x", padx=12, pady=(0, 16))
+        self._bar_section(chart_row_2, "Students by Year Level",
+                          self._count_by("year_level", "No Year"),
+                          self.T["WARNING"])
+        self._bar_section(chart_row_2, "GWA Result",
+                          {
+                              "Passing": passing,
+                              "At Risk": len(at_risk_students),
+                              "INC": len(self.students) - len(gwa_values),
+                          },
+                          self.T["DANGER"])
+
+        tk.Label(inner, text="At-Risk Students", font=("Arial", 12, "bold"),
+                 bg=self.T["BG"], fg=self.T["TEXT"]).pack(
+            anchor="w", padx=28, pady=(8, 4))
+        tf = self._card(inner)
+        tf.pack(fill="x", padx=20, pady=(0, 20))
+        self._style_tree()
+        cols = ("Student ID", "Name", "Course", "Year", "GWA", "Status")
+        tree = ttk.Treeview(tf, columns=cols, show="headings", height=8)
+        vsb = ttk.Scrollbar(tf, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        tree.pack(fill="x", padx=8, pady=8)
+
+        for col, width in zip(cols, [110, 210, 90, 60, 70, 90]):
+            tree.heading(col, text=col)
+            tree.column(col, width=width, anchor="center", minwidth=50)
+        tree.tag_configure("odd", background=self.T["ROW_ODD"])
+        tree.tag_configure("even", background=self.T["ROW_EVEN"])
+
+        if at_risk_students:
+            for i, student in enumerate(at_risk_students[:25]):
+                gwa = self._safe_gwa(student)
+                tree.insert("", "end", tags=("odd" if i % 2 else "even",),
+                            values=(student.get("student_id", ""),
+                                    student.get("name", ""),
+                                    student.get("course", ""),
+                                    student.get("year_level", ""),
+                                    f"{gwa:.2f}" if gwa is not None else "N/A",
+                                    student.get("status", "Regular")))
+        else:
+            tree.insert("", "end", values=("", "No at-risk students found", "", "", "", ""))
+
     YEAR_LEVELS = ["1","2","3","4"]
     STATUSES    = ["Regular","Irregular","LOA"]
-    GRADE_SUBJS = [("Mathematics","g_math"),("Science","g_sci"),
-                   ("English","g_eng"),("Programming","g_prog")]
+    OVERALL_G = [("General Weighted Average" , "GWA")]
 
     def _show_form(self, prefill: dict | None = None):
         self._clear_content()
@@ -375,13 +564,13 @@ class Dashboard:
 
         # Grades
         base = (len(FIELDS)//2 + len(FIELDS)%2) * 2
-        tk.Label(body, text="Academic Grades (0 – 100)",
+        tk.Label(body, text="General Weighted Average: (0 – 100)",
                  font=("Arial", 10, "bold"),
                  bg=self.T["CARD"], fg=self.T["ACCENT"]).grid(
             row=base, column=0, columnspan=4, sticky="w", pady=(18,4))
         ttk.Separator(body).grid(row=base+1, column=0, columnspan=4,
                                  sticky="ew", pady=(0,8))
-        for i, (lbl, key) in enumerate(self.GRADE_SUBJS):
+        for i, (lbl, key) in enumerate(self.OVERALL_G):
             r, ci = divmod(i, 2); c = ci * 2
             tk.Label(body, text=lbl, font=("Arial", 9),
                      bg=self.T["CARD"], fg=self.T["TEXT"],
@@ -404,44 +593,82 @@ class Dashboard:
         for k, v in self.form_vars.items():
             v.set("0.00" if k.startswith("g_") else "")
 
+    import re  # Add this at the top of your dashboard.py file
+
+    # ───── In your _save_record() method, replace the validation section with this: ─────
+
+    import re  # Add this at the top of your dashboard.py file
+
+    # ───── In your _save_record() method, replace the validation section with this: ─────
+
     def _save_record(self):
         try:
-            ln  = self.form_vars["last_name"].get().strip()
-            fn  = self.form_vars["first_name"].get().strip()
+            # Get all form values first
+            ln = self.form_vars["last_name"].get().strip()
+            fn = self.form_vars["first_name"].get().strip()
             sid = self.form_vars["student_id"].get().strip()
             crs = self.form_vars["course"].get().strip()
-            yr  = self.form_vars["year_level"].get().strip()
-            st  = self.form_vars["status"].get().strip()
-
-            # Required fields
-            missing = [name for name, val in [
-                ("Last Name", ln), ("First Name", fn), ("Student ID", sid),
-                ("Course", crs), ("Year Level", yr), ("Status", st)
-            ] if not val]
-            if missing:
-                raise ValueError(f"Required field(s) are empty: {', '.join(missing)}")
-
-            # Student ID format
-            if not all(c.isalnum() or c in "-_" for c in sid):
-                raise ValueError(
-                    "Student ID may only contain letters, digits, hyphens, or underscores.")
-
-            # Email
+            yr = self.form_vars["year_level"].get().strip()
+            st = self.form_vars["status"].get().strip()
             email = self.form_vars["email"].get().strip()
-            if email and "@" not in email:
-                raise ValueError("Invalid email address — must contain '@'.")
-
-            # Contact
             contact = self.form_vars["contact"].get().strip()
-            if contact:
-                clean_c = contact.replace("+","").replace("-","").replace(" ","")
-                if not clean_c.isdigit():
-                    raise ValueError(
-                        "Contact number may only contain digits, '+', '-', and spaces.")
+            address = self.form_vars["address"].get().strip()
+            section = self.form_vars["section"].get().strip()
 
-            # Grades
+            # ═════════════════════════════════════════════════════════════════════
+            # VALIDATION
+            # ═════════════════════════════════════════════════════════════════════
+
+            # 1. Required fields check
+            missing = [name for name, val in [
+                ("Last Name", ln),
+                ("First Name", fn),
+                ("Student ID", sid),
+                ("Course", crs),
+                ("Year Level", yr),
+                ("Status", st),
+                ("Email", email),
+                ("Address", address),
+                ("Contact Number", contact),
+            ] if not val]
+
+            if missing:
+                raise ValueError(
+                    f"Required field(s) are empty: {', '.join(missing)}"
+                )
+
+            # 2. Student ID format validation
+            if not all(c.isdigit() or c == "-" for c in sid):
+                raise ValueError(
+                    "Student ID may only contain digits (0-9) and hyphens (-)."
+                )
+
+            # 3. Email validation - PLV email only
+            email_pattern = r"^[A-Za-z0-9._%+-]+@plv\.edu\.ph$"
+            if not re.match(email_pattern, email):
+                raise ValueError(
+                    "Email must be a valid PLV email address (example@plv.edu.ph)."
+                )
+
+            # 4. Contact number validation
+            if not contact.isdigit():
+                raise ValueError(
+                    "Contact number must contain digits only."
+                )
+
+            if len(contact) != 11:
+                raise ValueError(
+                    "Contact number must be exactly 11 digits."
+                )
+
+            if not contact.startswith("09"):
+                raise ValueError(
+                    "Contact number must start with '09'."
+                )
+
+            # 5. Grades validation
             grades = {}
-            for subj, key in self.GRADE_SUBJS:
+            for subj, key in self.OVERALL_G:
                 raw = self.form_vars[key].get().strip()
                 try:
                     g = float(raw)
@@ -450,15 +677,17 @@ class Dashboard:
                     grades[key] = f"{g:.2f}"
                 except ValueError:
                     raise ValueError(
-                        f"Grade for {subj} must be a number between 0 and 100.")
+                        f"Grade for {subj} must be a number between 0 and 100."
+                    )
 
-            # Duplicate Student ID (hard block)
+            # 6. Duplicate Student ID check (hard block)
             for i, s in enumerate(self.students):
                 if s["student_id"].lower() == sid.lower() and i != self._edit_idx:
                     raise ValueError(
-                        f"Student ID '{sid}' is already in use by {s['name']}.")
+                        f"Student ID '{sid}' is already in use by {s['name']}."
+                    )
 
-            # Duplicate Name+Course (soft warning)
+            # 7. Duplicate Name+Course check (soft warning)
             full = f"{ln} {fn}".lower()
             for i, s in enumerate(self.students):
                 existing = s["name"].lower().replace(", ", " ")
@@ -470,31 +699,38 @@ class Dashboard:
                             "Do you want to save anyway?"):
                         return
 
+            # ═════════════════════════════════════════════════════════════════════
+            # ALL VALIDATIONS PASSED - CREATE RECORD
+            # ═════════════════════════════════════════════════════════════════════
+
             rec = {
-                "last_name":  ln,   "first_name": fn,
-                "name":       f"{ln}, {fn}",
-                "student_id": sid,  "course":     crs,
-                "year_level": yr,   "status":     st,
-                "section":    self.form_vars["section"].get().strip(),
-                "email":      email,
-                "contact":    contact,
-                "address":    self.form_vars["address"].get().strip(),
+                "last_name": ln,
+                "first_name": fn,
+                "name": f"{ln}, {fn}",
+                "student_id": sid,
+                "course": crs,
+                "year_level": yr,
+                "status": st,
+                "section": section,
+                "email": email,
+                "contact": contact,
+                "address": address,
                 "date_added": datetime.date.today().strftime("%Y-%m-%d"),
                 **grades,
             }
 
             if self._edit_idx is not None:
-                if self.confirm_upd:
-                    if not messagebox.askyesno(
-                            "Confirm Update",
-                            f"Update record for {rec['name']}?"):
-                        return
+                # Update existing student
+                old_id = self.students[self._edit_idx]["student_id"]
                 self.students[self._edit_idx] = rec
+                db.update_student(old_id, rec)
                 self._log(f"Updated student '{rec['name']}' (ID: {sid})")
                 messagebox.showinfo("✅ Updated",
                                     f"Record for {rec['name']} updated successfully!")
             else:
+                # Add new student
                 self.students.append(rec)
+                db.add_student(rec)
                 self._log(f"Added student '{rec['name']}' (ID: {sid}) — "
                           f"{crs}, Year {yr}, {st}")
                 messagebox.showinfo("✅ Saved",
@@ -506,7 +742,6 @@ class Dashboard:
             messagebox.showwarning("⚠ Validation Error", str(e))
         except Exception as e:
             messagebox.showerror("❌ Unexpected Error", str(e))
-
     # ═════════════════════════════════════════════════════════════════════
     # RECORDS
     # ═════════════════════════════════════════════════════════════════════
@@ -519,19 +754,48 @@ class Dashboard:
         # Toolbar
         tb = tk.Frame(self._content, bg=self.T["BG"], pady=8)
         tb.pack(fill="x", padx=20)
-        tk.Label(tb, text="🔍 Search by ID:", font=("Arial", 10),
+
+        left = tk.Frame(tb, bg=self.T["BG"])
+        left.pack(side="left")
+
+        tk.Label(left, text="🔍 Search by ID:", font=("Arial", 10),
                  bg=self.T["BG"], fg=self.T["TEXT"]).pack(side="left")
+
         sv = tk.StringVar(value=term)
-        se = self._entry(tb, sv, width=26)
+        se = self._entry(left, sv, width=26)
         se.pack(side="left", padx=6, ipady=4)
-        se.focus()
-        se.bind("<Return>", lambda e: self._show_records(sv.get()))
-        self._btn(tb, "Search",   lambda: self._show_records(sv.get()),
+
+        self._btn(left, "Search",
+                  lambda: self._show_records(sv.get()),
                   bg=self.T["ACCENT"]).pack(side="left", padx=2)
-        self._btn(tb, "Clear",    lambda: self._show_records(""),
+
+        self._btn(left, "Clear",
+                  lambda: self._show_records(""),
                   bg=self.T["GRAY"]).pack(side="left", padx=2)
-        self._btn(tb, "➕ Add New", lambda: self._show_form(),
-                  bg=self.T["SUCCESS"]).pack(side="right")
+
+
+
+        right = tk.Frame(tb, bg=self.T["BG"])
+        right.pack(side="right")
+
+
+        action_tb = tk.Frame(self._content, bg=self.T["BG"], pady=5)
+        action_tb.pack(fill="x", padx=20)
+
+        self._btn(action_tb, "👁 View Details", self._view_details,
+                  bg=self.T["ACCENT"]).pack(side="left", padx=2)
+
+        self._btn(action_tb, "✏️ Update", self._update_student,
+                  bg=self.T["WARNING"]).pack(side="left", padx=2)
+
+        self._btn(action_tb, "🗑️ Delete", self._delete_student,
+                  bg=self.T["DANGER"]).pack(side="left", padx=2)
+
+        self._btn(action_tb, "➕ Add New",
+                  lambda: self._show_form(),
+                  bg=self.T["SUCCESS"]).pack(side="left", padx=2)
+
+
 
         # Table
         tf = self._card(self._content)
@@ -572,15 +836,7 @@ class Dashboard:
                                       s["year_level"], s.get("status","Regular"),
                                       s.get("section",""), s.get("date_added","")))
 
-        # Action bar
-        ab = tk.Frame(self._content, bg=self.T["BG"], pady=7)
-        ab.pack(fill="x", padx=20)
-        self._btn(ab, "👁 View Details", self._view_details,   bg=self.T["ACCENT"]).pack(side="left", padx=(0,6))
-        self._btn(ab, "✏️ Update",       self._update_student, bg=self.T["WARNING"]).pack(side="left", padx=(0,6))
-        self._btn(ab, "🗑️ Delete",       self._delete_student, bg=self.T["DANGER"]).pack(side="left")
-        tk.Label(ab, text=f"Showing {len(shown)} / {len(self.students)} records",
-                 font=("Arial", 9), bg=self.T["BG"], fg=self.T["GRAY"]).pack(side="right")
-        self._tree.bind("<Double-1>", lambda e: self._view_details())
+
 
     def _sort_tree(self, col: str):
         if self._sort_col == col:
@@ -648,17 +904,17 @@ class Dashboard:
                      bg=self.T["CARD"], fg=col).pack(side="left")
 
         ttk.Separator(body).pack(fill="x", pady=8)
-        tk.Label(body, text="📊 Academic Grades",
+        tk.Label(body, text="General Weighted Average",
                  font=("Arial", 10, "bold"),
                  bg=self.T["CARD"], fg=self.T["TEXT"]).pack(anchor="w", pady=(0,4))
 
         gf = tk.Frame(body, bg=self.T["ROW_ODD"], pady=8, padx=14)
         gf.pack(fill="x")
-        for subj, key in self.GRADE_SUBJS:
+        for subj, key in self.OVERALL_G:
             gr = tk.Frame(gf, bg=self.T["ROW_ODD"]); gr.pack(fill="x", pady=2)
             tk.Label(gr, text=subj, font=("Arial", 9),
                      bg=self.T["ROW_ODD"], fg=self.T["TEXT"],
-                     width=14, anchor="w").pack(side="left")
+                     width=24, anchor="w").pack(side="left")
             val = s.get(key, "0.00")
             try:
                 gcol = self.T["SUCCESS"] if float(val) >= 75 else self.T["DANGER"]
@@ -683,13 +939,8 @@ class Dashboard:
             if idx is None: return
             name = self.students[idx]["name"]
             sid  = self.students[idx]["student_id"]
-            if self.confirm_del:
-                if not messagebox.askyesno(
-                        "⚠ Confirm Delete",
-                        f"Delete record for:\n\n{name}  (ID: {sid})\n\n"
-                        "This action cannot be undone."):
-                    return
             self.students.pop(idx)
+            db.delete_student(sid)
             self._log(f"Deleted student '{name}' (ID: {sid})")
             messagebox.showinfo("Deleted", f"Record for {name} has been removed.")
             self._show_records()
@@ -708,8 +959,13 @@ class Dashboard:
         tk.Label(tb, text=f"{len(self.courses_data)} courses registered",
                  font=("Arial", 10), bg=self.T["BG"],
                  fg=self.T["GRAY"]).pack(side="left")
-        self._btn(tb, "➕ Add Course", self._add_course_dialog,
-                  bg=self.T["SUCCESS"]).pack(side="right")
+
+        ab = tk.Frame(self._content, bg=self.T["BG"], pady=7)
+        ab.pack(fill="x", padx=20)
+        self._btn(ab, "✏️ Edit Course", self._edit_course, bg=self.T["WARNING"]).pack(side="left", padx=(0, 6))
+        self._btn(ab, "🗑️ Delete Course", self._delete_course, bg=self.T["DANGER"]).pack(side="left", padx=(0, 6))
+        self._btn(ab, "➕ Add Course", self._add_course_dialog,
+                  bg=self.T["SUCCESS"]).pack(side="left")
 
         tf = self._card(self._content)
         tf.pack(fill="both", expand=True, padx=20, pady=(4,0))
@@ -728,11 +984,6 @@ class Dashboard:
         self._ctree.tag_configure("even", background=self.T["ROW_EVEN"])
         self._refresh_ctree()
 
-        ab = tk.Frame(self._content, bg=self.T["BG"], pady=7)
-        ab.pack(fill="x", padx=20)
-        self._btn(ab, "✏️ Edit Course",   self._edit_course,   bg=self.T["WARNING"]).pack(side="left", padx=(0,6))
-        self._btn(ab, "🗑️ Delete Course", self._delete_course, bg=self.T["DANGER"]).pack(side="left")
-        self._ctree.bind("<Double-1>", lambda e: self._edit_course())
 
     def _refresh_ctree(self):
         self._ctree.delete(*self._ctree.get_children())
@@ -799,11 +1050,16 @@ class Dashboard:
                 rec = {"code": code, "name": name,
                        "instructor": instructor, "units": units}
                 if idx is not None:
+                    # Update existing course
+                    old_code = self.courses_data[idx]["code"]
                     self.courses_data[idx] = rec
+                    db.update_course(old_code, rec)
                     self._log(f"Updated course '{code} — {name}'")
                     messagebox.showinfo("✅ Updated", f"Course '{code}' updated!")
                 else:
+                    # Add new course
                     self.courses_data.append(rec)
+                    db.add_course(rec)
                     self._log(f"Added course '{code} — {name}'")
                     messagebox.showinfo("✅ Added", f"Course '{code}' added!")
                 win.destroy()
@@ -847,6 +1103,7 @@ class Dashboard:
             if not messagebox.askyesno("⚠ Confirm Delete", msg):
                 return
             self.courses_data.pop(idx)
+            db.delete_course(code)
             self._log(f"Deleted course '{code} — {name}'")
             messagebox.showinfo("Deleted", f"Course '{code}' removed.")
             self._show_courses()
@@ -880,7 +1137,7 @@ class Dashboard:
         lt.pack(fill="both", expand=True)
         self._style_tree()
         for col, w, anchor in [
-            ("#", 46, "center"),
+            ("#", 45, "center"),
             ("Timestamp", 170, "center"),
             ("Action", 500, "center")
         ]:
@@ -901,6 +1158,7 @@ class Dashboard:
         if messagebox.askyesno("Clear Log",
                                "Clear all activity log entries? This cannot be undone."):
             self.activity_log.clear()
+            db.clear_activity_log()
             self._show_activity_log()
 
     # ═════════════════════════════════════════════════════════════════════
@@ -912,30 +1170,7 @@ class Dashboard:
         _, inner = self._scrollable(self._content)
 
         # ── System Info ──
-        c1 = self._card(inner); c1.pack(padx=40, pady=24, fill="x")
-        tk.Label(c1, text="System Information", font=("Arial", 12, "bold"),
-                 bg=self.T["CARD"], fg=self.T["TEXT"]).pack(
-            anchor="w", padx=24, pady=(18,6))
-        ttk.Separator(c1).pack(fill="x", padx=20)
-        f1 = tk.Frame(c1, bg=self.T["CARD"], padx=28, pady=14); f1.pack(fill="x")
-        for lbl, val in [
-            ("System Name",    "Student Information System"),
-            ("Version",        "3.0.0"),
-            ("Current User",   self.current_user),
-            ("Total Students", str(len(self.students))),
-            ("Total Courses",  str(len(self.courses_data))),
-            ("Log Entries",    str(len(self.activity_log))),
-            ("Date",           datetime.date.today().strftime("%B %d, %Y")),
-        ]:
-            r = tk.Frame(f1, bg=self.T["CARD"]); r.pack(fill="x", pady=3)
-            tk.Label(r, text=lbl+":", font=("Arial", 9, "bold"),
-                     bg=self.T["CARD"], fg=self.T["ACCENT"],
-                     width=16, anchor="w").pack(side="left")
-            tk.Label(r, text=val, font=("Arial", 10),
-                     bg=self.T["CARD"], fg=self.T["TEXT"]).pack(side="left")
-
-        # ── Appearance ──
-        c2 = self._card(inner); c2.pack(padx=40, pady=(0,16), fill="x")
+        c2 = self._card(inner); c2.pack(padx=40, pady=24, fill="x")
         tk.Label(c2, text="Appearance", font=("Arial", 12, "bold"),
                  bg=self.T["CARD"], fg=self.T["TEXT"]).pack(
             anchor="w", padx=24, pady=(18,6))
@@ -953,28 +1188,6 @@ class Dashboard:
         self._btn(f2, "Apply", self._apply_theme_setting,
                   bg=self.T["ACCENT"]).pack(side="left", padx=12)
 
-        # ── Confirmations ──
-        c3 = self._card(inner); c3.pack(padx=40, pady=(0,16), fill="x")
-        tk.Label(c3, text="Confirmation Dialogs", font=("Arial", 12, "bold"),
-                 bg=self.T["CARD"], fg=self.T["TEXT"]).pack(
-            anchor="w", padx=24, pady=(18,6))
-        ttk.Separator(c3).pack(fill="x", padx=20)
-        f3 = tk.Frame(c3, bg=self.T["CARD"], padx=28, pady=14); f3.pack(fill="x")
-        self._conf_del_var = tk.BooleanVar(value=self.confirm_del)
-        self._conf_upd_var = tk.BooleanVar(value=self.confirm_upd)
-        for text, var in [
-            ("Confirm before deleting a student record",  self._conf_del_var),
-            ("Confirm before updating a student record",  self._conf_upd_var),
-        ]:
-            tk.Checkbutton(f3, text=text, variable=var,
-                           bg=self.T["CARD"], fg=self.T["TEXT"],
-                           selectcolor=self.T["ACCENT"],
-                           activebackground=self.T["CARD"],
-                           font=("Arial", 10)).pack(anchor="w", pady=2)
-        self._btn(f3, "Save Preferences", self._save_prefs,
-                  bg=self.T["SUCCESS"]).pack(anchor="w", pady=(10,0))
-
-        # ── Change Credentials ──
         c4 = self._card(inner); c4.pack(padx=40, pady=(0,28), fill="x")
         tk.Label(c4, text="Change Account Credentials",
                  font=("Arial", 12, "bold"),
@@ -1010,16 +1223,16 @@ class Dashboard:
         self._btn(f4, "Update Credentials", self._change_credentials,
                   bg=self.T["ACCENT"]).pack(anchor="w", pady=(10,0))
 
+
     def _apply_theme_setting(self):
-        self.theme_name = self._theme_var.get()
-        self._apply_theme()
+        selected = self._theme_var.get()
+        if selected == self.theme_name:
+            return
+
+        self.theme_name = selected
         self._build_main()
         self._show_settings()
 
-    def _save_prefs(self):
-        self.confirm_del = self._conf_del_var.get()
-        self.confirm_upd = self._conf_upd_var.get()
-        messagebox.showinfo("✅ Saved", "Preferences saved successfully!")
 
     def _change_credentials(self):
         try:
@@ -1069,8 +1282,19 @@ class Dashboard:
 
 
 
-# ── Entry point ───────────────────────────────────────────────────────────
+        if self.on_logout:
+            self.on_logout()
+
+# ── Entry point ───────────────────────────────────────────────────────
 if __name__ == "__main__":
+    db.init()
+    db.seed_courses()
+
+    # Create a default admin account if no users exist yet
+    if not db.user_exists("admin"):
+        db.register_user("admin", "admin123")
+        print("Default account created → username: admin  password: admin123")
+
     root = tk.Tk()
-    Dashboard(root)
+    Dashboard(root, username="admin")
     root.mainloop()
