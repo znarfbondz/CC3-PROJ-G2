@@ -240,7 +240,7 @@ class Dashboard:
         ttk.Separator(self._sidebar).pack(fill="x", padx=10, pady=4)
 
         nav = [
-            ("Reports", self._show_reports),
+            ("🗃️ Reports", self._show_reports),
             ("📊   Dashboard",    self._show_dashboard),
             ("➕   Add Student",  lambda: self._show_form()),
             ("📋   View Records", self._show_records),
@@ -428,7 +428,7 @@ class Dashboard:
 
     def _show_reports(self):
         self._clear_content()
-        self._header(self._content, "Reports / Analytics")
+        self._header(self._content, "🗃️ Reports / Analytics")
         _, inner = self._scrollable(self._content)
 
         gwa_values = [g for g in (self._safe_gwa(s) for s in self.students)
@@ -448,7 +448,7 @@ class Dashboard:
             ("Average GWA", f"{avg_gwa:.2f}" if gwa_values else "N/A", self.T["ACCENT"]),
             ("Passing", str(passing), self.T["SUCCESS"]),
             ("At Risk", str(len(at_risk_students)), self.T["DANGER"]),
-            ("Courses", str(len(self.courses_data)), self.T["WARNING"]),
+            ("INC Students", str(len(self.students) - len(gwa_values)), self.T["WARNING"]),
         ]
         for i, (label, value, color) in enumerate(stats):
             self._report_stat_card(stat_row, label, value, color, i)
@@ -471,7 +471,7 @@ class Dashboard:
                           {
                               "Passing": passing,
                               "At Risk": len(at_risk_students),
-                              "No GWA": len(self.students) - len(gwa_values),
+                              "INC": len(self.students) - len(gwa_values),
                           },
                           self.T["DANGER"])
 
